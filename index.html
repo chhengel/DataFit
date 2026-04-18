@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bildanalyse mit Koordinatensystem und Fit-Overlay</title>
+  <style>
+    :root{
+      --bg:#f1f5f9;
+      --card:#ffffff;
+      --line:#cbd5e1;
+      --text:#0f172a;
+      --muted:#475569;
+      --accent:#2563eb;
+      --accent2:#7c3aed;
+      --accent3:#16a34a;
+      --fit:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Arial, Helvetica, sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .app{
+      max-width:1400px;
+      margin:0 auto;
+      padding:20px;
+      display:grid;
+      grid-template-columns:360px 1fr;
+      gap:20px;
+      min-height:100vh;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:18px;
+      box-shadow:0 1px 4px rgba(15,23,42,.06);
+      overflow:hidden;
+    }
+    .panel{
+      padding:18px;
+    }
+    h1{
+      font-size:22px;
+      margin:0 0 14px 0;
+    }
+    h2{
+      font-size:16px;
+      margin:18px 0 10px 0;
+    }
+    .dropzone{
+      border:2px dashed var(--line);
+      border-radius:16px;
+      background:#f8fafc;
+      padding:18px;
+      text-align:center;
+      transition:.15s ease;
+    }
+    .dropzone.drag{
+      background:#e2e8f0;
+      border-color:#0f172a;
+    }
+    .dropzone p{
+      margin:8px 0 12px 0;
+      color:var(--muted);
+      font-size:14px;
+    }
+    button, select, input[type="number"], input[type="text"]{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 12px;
+      font-size:14px;
+      background:#fff;
+      color:var(--text);
+    }
+    button{
+      background:var(--text);
+      color:#fff;
+      cursor:pointer;
+      font-weight:600;
+    }
+    button.secondary{
+      background:#fff;
+      color:var(--text);
+    }
+    button.toggle.on{
+      background:var(--text);
+      color:#fff;
+    }
+    button.toggle.off{
+      background:#fff;
+      color:var(--text);
+    }
+    .row{
+      display:grid;
+      gap:10px;
+      margin:12px 0;
+    }
+    .twocol{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    label{
+      display:block;
+      font-size:13px;
+      margin-bottom:6px;
+      color:var(--muted);
+      font-weight:600;
+    }
+    .hint{
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:14px;
+      padding:12px;
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.4;
+    }
+    .formula{
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:14px;
+      padding:12px;
+      font-size:14px;
+    }
+    .param-card{
+      min-width:220px;
+      flex:0 0 220px;
+      border:1px solid #e2e8f0;
+      border-radius:14px;
+      padding:12px;
+      margin:10px 0;
+      background:#fff;
+    }
+    .param-head{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+      margin-bottom:8px;
+      font-size:14px;
+    }
+    input[type="range"]{
+      width:100%;
+      margin:8px 0;
+    }
+    .canvas-wrap{
+      padding:14px;
+      height:100%;
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+      overflow:auto;
+      background:#fff;
+    }
+    canvas{
+      display:block;
+      max-width:100%;
+      border-radius:14px;
+      background:#fff;
+      cursor:crosshair;
+      touch-action:none;
+    }
+    .tabs{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:8px;
+      margin-top:16px;
+    }
+    .tabbtn{
+      background:#fff;
+      color:var(--text);
+    }
+    .tabbtn.active{
+      background:var(--text);
+      color:#fff;
+    }
+    .tab{
+      display:none;
+      margin-top:14px;
+    }
+    .tab.active{
+      display:block;
+    }
+    .small{
+      font-size:12px;
+      color:var(--muted);
+    }
+    @media (max-width: 980px){
+      .app{grid-template-columns:1fr}
+    }
+  
+    #paramContainer{
+      display:flex;
+      gap:12px;
+      overflow-x:auto;
+      padding:14px;
+      align-items:flex-start;
+      min-height:120px;
+      width:100%;
+    }
+    .slider-bar{
+      grid-column:1 / -1;
+      display:block;
+    }
+    .slider-bar .panel{
+      padding:14px;
+      display:block;
+    }
+    .param-card{
+      min-width:220px;
+      flex:0 0 220px;
+      margin:0;
+    }
+
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <div class="panel">
+        <h1>Bildanalyse mit Fit-Overlay</h1>
+
+        <div id="dropzone" class="dropzone">
+          <p>Bild hierher ziehen oder per Explorer auswählen</p>
+          <button id="browseBtn" type="button">Bild öffnen</button>
+          <input id="fileInput" type="file" accept="image/*" hidden>
+        </div>
+
+        <div class="tabs">
+          <button class="tabbtn active" data-tab="axes">Achsen</button>
+          <button class="tabbtn" data-tab="fit">Fit</button>
+          <button class="tabbtn" data-tab="view">Ansicht</button>
+        </div>
+
+        <div id="tab-axes" class="tab active">
+          <h2>Koordinatensystem</h2>
+          <div class="row">
+            <div>
+              <label for="xRefValue">Wert des x-Referenzpunkts</label>
+              <input id="xRefValue" type="number" step="any" value="1">
+            </div>
+            <div>
+              <label for="yRefValue">Wert des y-Referenzpunkts</label>
+              <input id="yRefValue" type="number" step="any" value="1">
+            </div>
+            <button id="resetAxesBtn" class="secondary" type="button">Achsen zurücksetzen</button>
+          </div>
+          <div class="hint">
+            Grünen Punkt ziehen: Ursprung<br>
+            Blauen Punkt ziehen: x-Skalierung<br>
+            Violetten Punkt ziehen: y-Skalierung
+          </div>
+        </div>
+
+        <div id="tab-fit" class="tab">
+          <h2>Fit-Overlay</h2>
+          <div class="row">
+            <div>
+              <label for="fitType">Fit-Typ</label>
+              <select id="fitType">
+                <option value="linear">Linear</option>
+                <option value="quadratic">Quadratisch</option>
+                <option value="exponential">Exponentiell</option>
+                <option value="sine">Sinus</option>
+                <option value="cosine">Kosinus</option>
+                <option value="expsin">Exp. · Sinus</option>
+                <option value="expcos">Exp. · Kosinus</option>
+                <option value="generalsine">Allg. Sinus</option>
+              </select>
+            </div>
+          </div>
+          <div id="formulaBox" class="formula"></div>
+          
+        </div>
+
+        <div id="tab-view" class="tab">
+          <h2>Ansicht</h2>
+          <div class="row">
+            <button id="toggleFit" class="toggle on" type="button">Fit ausblenden</button>
+            <button id="toggleGrid" class="toggle on" type="button">Raster ausblenden</button>
+            <button id="toggleAxes" class="toggle on" type="button">Achsen ausblenden</button>
+          </div>
+          <div class="hint">
+            <div><strong>Aktuelle Skalierung</strong></div>
+            <div id="scaleInfoX">x: –</div>
+            <div id="scaleInfoY">y: –</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="canvas-wrap">
+        <canvas id="canvas" width="900" height="600"></canvas>
+      </div>
+    </div>
+
+    <div class="card slider-bar">
+      <div class="panel">
+        <div id="paramContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const FIT_DEFS = {
+      linear: {
+        label: "Linear",
+        formula: "y = m·x + n",
+        params: [
+          { key: "m", label: "m", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "n", label: "n", defaultValue: 0.5, min: 0, max: 1 }
+        ]
+      },
+      quadratic: {
+        label: "Quadratisch",
+        formula: "y = a·x² + b·x + c",
+        params: [
+          { key: "a", label: "a", defaultValue: 0.2, min: 0, max: 1 },
+          { key: "b", label: "b", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "c", label: "c", defaultValue: 0.3, min: 0, max: 1 }
+        ]
+      },
+      exponential: {
+        label: "Exponentiell",
+        formula: "y = a·e^(b·x) + c",
+        params: [
+          { key: "a", label: "a", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "b", label: "b", defaultValue: 0.4, min: 0, max: 1 },
+          { key: "c", label: "c", defaultValue: 0.2, min: 0, max: 1 }
+        ]
+      },
+      sine: {
+        label: "Sinus",
+        formula: "y = a·sin(ω·x)",
+        params: [
+          { key: "a", label: "a", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "w", label: "ω", defaultValue: 0.5, min: 0, max: 1 }
+        ]
+      },
+      cosine: {
+        label: "Kosinus",
+        formula: "y = a·cos(ω·x)",
+        params: [
+          { key: "a", label: "a", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "w", label: "ω", defaultValue: 0.5, min: 0, max: 1 }
+        ]
+      },
+      expsin: {
+        label: "Exp. · Sinus",
+        formula: "y = a·e^(-b·x)·sin(ω·x)",
+        params: [
+          { key: "a", label: "a", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "b", label: "b", defaultValue: 0.3, min: 0, max: 1 },
+          { key: "w", label: "ω", defaultValue: 0.5, min: 0, max: 1 }
+        ]
+      },
+      expcos: {
+        label: "Exp. · Kosinus",
+        formula: "y = a·e^(-b·x)·cos(ω·x)",
+        params: [
+          { key: "a", label: "a", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "b", label: "b", defaultValue: 0.3, min: 0, max: 1 },
+          { key: "w", label: "ω", defaultValue: 0.5, min: 0, max: 1 }
+        ]
+      },
+      generalsine: {
+        label: "Allg. Sinus",
+        formula: "y = a·sin(ω·x + φ₀)",
+        params: [
+          { key: "a", label: "a", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "w", label: "ω", defaultValue: 0.5, min: 0, max: 1 },
+          { key: "phi0", label: "φ₀", defaultValue: 0.0, min: 0, max: 1 }
+        ]
+      }
+    };
+
+    const state = {
+      image: null,
+      imageSrc: null,
+      canvasWidth: 900,
+      canvasHeight: 600,
+      origin: { x: 220, y: 220 },
+      xPoint: { x: 360, y: 220, value: 1 },
+      yPoint: { x: 220, y: 80, value: 1 },
+      fitType: "linear",
+      paramState: {},
+      showFit: true,
+      showGrid: true,
+      showAxes: true,
+      activeDrag: null,
+      handleRadius: 8
+    };
+
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const fileInput = document.getElementById("fileInput");
+    const dropzone = document.getElementById("dropzone");
+    const browseBtn = document.getElementById("browseBtn");
+    const xRefValue = document.getElementById("xRefValue");
+    const yRefValue = document.getElementById("yRefValue");
+    const resetAxesBtn = document.getElementById("resetAxesBtn");
+    const fitTypeSelect = document.getElementById("fitType");
+    const formulaBox = document.getElementById("formulaBox");
+    const paramContainer = document.getElementById("paramContainer");
+    const toggleFitBtn = document.getElementById("toggleFit");
+    const toggleGridBtn = document.getElementById("toggleGrid");
+    const toggleAxesBtn = document.getElementById("toggleAxes");
+    const scaleInfoX = document.getElementById("scaleInfoX");
+    const scaleInfoY = document.getElementById("scaleInfoY");
+
+    function clamp(v, min, max){
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function distance(a, b){
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function buildDefaultParamState(type){
+      const obj = {};
+      for(const p of FIT_DEFS[type].params){
+        obj[p.key] = { value: p.defaultValue, min: p.min, max: p.max };
+      }
+      return obj;
+    }
+
+    function xPixelsPerUnit(){
+      const d = distance(state.origin, state.xPoint);
+      const value = Number(state.xPoint.value) || 1;
+      return d / value;
+    }
+
+    function yPixelsPerUnit(){
+      const d = distance(state.origin, state.yPoint);
+      const value = Number(state.yPoint.value) || 1;
+      return d / value;
+    }
+
+    function displayScale(){
+      const rect = canvas.getBoundingClientRect();
+      if(!rect.width || !rect.height) return { sx: 1, sy: 1 };
+      return {
+        sx: canvas.width / rect.width,
+        sy: canvas.height / rect.height
+      };
+    }
+
+    function fontPx(screenPx){
+      const s = displayScale();
+      return Math.max(1, screenPx * s.sy);
+    }
+
+    function linePx(screenPx){
+      const s = displayScale();
+      return Math.max(1, screenPx * ((s.sx + s.sy) / 2));
+    }
+
+    function niceStep(rawStep){
+      if(rawStep <= 0 || !Number.isFinite(rawStep)) return 1;
+      const exp = Math.floor(Math.log10(rawStep));
+      const f = rawStep / Math.pow(10, exp);
+      let niceF;
+      if(f <= 1) niceF = 1;
+      else if(f <= 2) niceF = 2;
+      else if(f <= 5) niceF = 5;
+      else niceF = 10;
+      return niceF * Math.pow(10, exp);
+    }
+
+    function decimalsForStep(step){
+      if(!Number.isFinite(step) || step <= 0) return 0;
+      return Math.max(0, Math.min(6, Math.ceil(-Math.log10(step))));
+    }
+
+    function formatTickValue(v, step){
+      const d = decimalsForStep(step);
+      const rounded = Number(v.toFixed(d));
+      return String(rounded);
+    }
+
+    function axisStep(pixelsPerUnit){
+      const minPx = 55;
+      const raw = minPx / pixelsPerUnit;
+      return niceStep(raw);
+    }
+
+    function handleRadiusPx(screenPx){
+      const s = displayScale();
+      return Math.max(1, screenPx * ((s.sx + s.sy) / 2));
+    }
+
+    function hitRadiusPx(screenPx){
+      const s = displayScale();
+      return Math.max(1, screenPx * ((s.sx + s.sy) / 2));
+    }
+
+    function evaluateFit(x){
+      const p = state.paramState;
+      switch(state.fitType){
+        case "linear": return p.m.value * x + p.n.value;
+        case "quadratic": return p.a.value * x*x + p.b.value * x + p.c.value;
+        case "exponential": return p.a.value * Math.exp(p.b.value * x) + p.c.value;
+        case "sine": return p.a.value * Math.sin(p.w.value * x);
+        case "cosine": return p.a.value * Math.cos(p.w.value * x);
+        case "expsin": return p.a.value * Math.exp(-p.b.value * x) * Math.sin(p.w.value * x);
+        case "expcos": return p.a.value * Math.exp(-p.b.value * x) * Math.cos(p.w.value * x);
+        case "generalsine": return p.a.value * Math.sin(p.w.value * x + p.phi0.value);
+        default: return 0;
+      }
+    }
+
+    function initParams(){
+      state.paramState = buildDefaultParamState(state.fitType);
+      renderParamControls();
+      render();
+    }
+
+    function renderParamControls(){
+      formulaBox.textContent = "Formel: " + FIT_DEFS[state.fitType].formula;
+      paramContainer.innerHTML = "";
+
+      for(const p of FIT_DEFS[state.fitType].params){
+        const s = state.paramState[p.key];
+        const card = document.createElement("div");
+        card.className = "param-card";
+
+        const head = document.createElement("div");
+        head.className = "param-head";
+        head.innerHTML = `<strong>${p.label}</strong><span id="val-${p.key}">${Number(s.value).toFixed(3)}</span>`;
+        card.appendChild(head);
+
+        const slider = document.createElement("input");
+        slider.type = "range";
+        slider.min = String(s.min);
+        slider.max = String(s.max);
+        slider.step = String(((s.max - s.min) / 500) || 0.001);
+        slider.value = String(s.value);
+        slider.addEventListener("input", () => {
+          state.paramState[p.key].value = Number(slider.value);
+          document.getElementById(`val-${p.key}`).textContent = Number(slider.value).toFixed(3);
+          render();
+        });
+        card.appendChild(slider);
+
+        const grid = document.createElement("div");
+        grid.className = "twocol";
+        grid.innerHTML = `
+          <div>
+            <label>Min</label>
+            <input type="number" step="any" value="${s.min}">
+          </div>
+          <div>
+            <label>Max</label>
+            <input type="number" step="any" value="${s.max}">
+          </div>
+        `;
+        const [minInput, maxInput] = grid.querySelectorAll("input");
+
+        minInput.addEventListener("change", () => {
+          let v = Number(minInput.value);
+          if(!Number.isFinite(v)) v = 0;
+          state.paramState[p.key].min = v;
+          if(state.paramState[p.key].value < v) state.paramState[p.key].value = v;
+          if(state.paramState[p.key].max < v) state.paramState[p.key].max = v;
+          renderParamControls();
+          render();
+        });
+
+        maxInput.addEventListener("change", () => {
+          let v = Number(maxInput.value);
+          if(!Number.isFinite(v)) v = 1;
+          state.paramState[p.key].max = v;
+          if(state.paramState[p.key].value > v) state.paramState[p.key].value = v;
+          if(state.paramState[p.key].min > v) state.paramState[p.key].min = v;
+          renderParamControls();
+          render();
+        });
+
+        card.appendChild(grid);
+        paramContainer.appendChild(card);
+      }
+    }
+
+    function setCanvasSize(w, h){
+      state.canvasWidth = w;
+      state.canvasHeight = h;
+      canvas.width = w;
+      canvas.height = h;
+    }
+
+    function setDefaultAxesForImage(){
+      const w = state.canvasWidth;
+      const h = state.canvasHeight;
+      const ox = w * 0.2;
+      const oy = h * 0.8;
+      state.origin = { x: ox, y: oy };
+      state.xPoint = { x: ox + Math.min(180, w * 0.2), y: oy, value: Number(xRefValue.value) || 1 };
+      state.yPoint = { x: ox, y: oy - Math.min(180, h * 0.2), value: Number(yRefValue.value) || 1 };
+    }
+
+    function loadImageFromFile(file){
+      if(!file || !file.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          state.image = img;
+          state.imageSrc = reader.result;
+          setCanvasSize(img.width, img.height);
+          setDefaultAxesForImage();
+          render();
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function getMousePos(evt){
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (evt.clientX - rect.left) * scaleX,
+        y: (evt.clientY - rect.top) * scaleY
+      };
+    }
+
+    function pickHandle(p){
+      const hit = hitRadiusPx(22);
+      if(distance(p, state.origin) < hit) return "origin";
+      if(distance(p, state.xPoint) < hit) return "xPoint";
+      if(distance(p, state.yPoint) < hit) return "yPoint";
+      return null;
+    }
+
+    function drawHandle(point, label, color){
+      const r = handleRadiusPx(8);
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = linePx(2);
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if(label){
+        ctx.fillStyle = "#0f172a";
+        ctx.font = `${fontPx(12)}px Arial`;
+        ctx.fillText(label, point.x + handleRadiusPx(12), point.y - handleRadiusPx(10));
+      }
+      ctx.restore();
+    }
+
+    function drawGrid(){
+      const xppu = xPixelsPerUnit();
+      const yppu = yPixelsPerUnit();
+      if(xppu <= 0 || yppu <= 0) return;
+
+      const xStep = axisStep(xppu);
+      const yStep = axisStep(yppu);
+      const xStepPx = xStep * xppu;
+      const yStepPx = yStep * yppu;
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(59,130,246,0.32)";
+      ctx.lineWidth = linePx(1);
+
+      for(let x = state.origin.x; x <= canvas.width; x += xStepPx){
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for(let x = state.origin.x - xStepPx; x >= 0; x -= xStepPx){
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for(let y = state.origin.y; y <= canvas.height; y += yStepPx){
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+      for(let y = state.origin.y - yStepPx; y >= 0; y -= yStepPx){
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawAxes(){
+      const xppu = xPixelsPerUnit();
+      const yppu = yPixelsPerUnit();
+      const xStep = axisStep(xppu);
+      const yStep = axisStep(yppu);
+      const xStepPx = xStep * xppu;
+      const yStepPx = yStep * yppu;
+
+      ctx.save();
+      ctx.strokeStyle = "#dc2626";
+      ctx.lineWidth = linePx(2);
+
+      ctx.beginPath();
+      ctx.moveTo(0, state.origin.y);
+      ctx.lineTo(canvas.width, state.origin.y);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(state.origin.x, 0);
+      ctx.lineTo(state.origin.x, canvas.height);
+      ctx.stroke();
+
+      ctx.fillStyle = "#dc2626";
+      ctx.font = `${fontPx(12)}px Arial`;
+      ctx.fillText("x", canvas.width - fontPx(18), state.origin.y - fontPx(10));
+      ctx.fillText("y", state.origin.x + fontPx(10), fontPx(18));
+
+      for(let x = state.origin.x, v = 0; x <= canvas.width; x += xStepPx, v += xStep){
+        ctx.fillText(formatTickValue(v, xStep), x + fontPx(2), state.origin.y + fontPx(18));
+      }
+      for(let x = state.origin.x - xStepPx, v = -xStep; x >= 0; x -= xStepPx, v -= xStep){
+        ctx.fillText(formatTickValue(v, xStep), x + fontPx(2), state.origin.y + fontPx(18));
+      }
+
+      for(let y = state.origin.y, v = 0; y >= 0; y -= yStepPx, v += yStep){
+        ctx.fillText(formatTickValue(v, yStep), state.origin.x + fontPx(6), y - fontPx(4));
+      }
+      for(let y = state.origin.y + yStepPx, v = -yStep; y <= canvas.height; y += yStepPx, v -= yStep){
+        ctx.fillText(formatTickValue(v, yStep), state.origin.x + fontPx(6), y - fontPx(4));
+      }
+
+      ctx.restore();
+    }
+
+    function drawFit(){
+      const xppu = xPixelsPerUnit();
+      const yppu = yPixelsPerUnit();
+
+      ctx.save();
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = linePx(3);
+      ctx.beginPath();
+
+      let started = false;
+      for(let px = 0; px <= canvas.width; px += 1){
+        const x = (px - state.origin.x) / xppu;
+        const y = evaluateFit(x);
+        const py = state.origin.y - y * yppu;
+        if(!Number.isFinite(py)){
+          started = false;
+          continue;
+        }
+        if(!started){
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          started = true;
+        } else {
+          ctx.lineTo(px, py);
+        }
+      }
+      if(started) ctx.stroke();
+      ctx.restore();
+    }
+
+    function render(){
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if(state.image){
+        ctx.drawImage(state.image, 0, 0, canvas.width, canvas.height);
+      } else {
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        grad.addColorStop(0, "#f8fafc");
+        grad.addColorStop(1, "#e2e8f0");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#64748b";
+        ctx.font = "24px Arial";
+        ctx.fillText("Bild per Drag-and-drop oder Dateidialog laden", 40, 60);
+      }
+
+      if(state.showGrid) drawGrid();
+      if(state.showAxes) drawAxes();
+      if(state.showFit) drawFit();
+
+      drawHandle(state.origin, "", "#16a34a");
+      drawHandle(state.xPoint, String(state.xPoint.value) + " auf x", "#2563eb");
+      drawHandle(state.yPoint, String(state.yPoint.value) + " auf y", "#7c3aed");
+
+      scaleInfoX.textContent = "x: " + xPixelsPerUnit().toFixed(2) + " px pro Einheit";
+      scaleInfoY.textContent = "y: " + yPixelsPerUnit().toFixed(2) + " px pro Einheit";
+    }
+
+    browseBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if(file) loadImageFromFile(file);
+    });
+
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("drag");
+    });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("drag");
+      const file = e.dataTransfer.files[0];
+      if(file) loadImageFromFile(file);
+    });
+
+    xRefValue.addEventListener("change", () => {
+      const v = Number(xRefValue.value) || 1;
+      state.xPoint.value = v;
+      render();
+    });
+
+    yRefValue.addEventListener("change", () => {
+      const v = Number(yRefValue.value) || 1;
+      state.yPoint.value = v;
+      render();
+    });
+
+    resetAxesBtn.addEventListener("click", () => {
+      setDefaultAxesForImage();
+      render();
+    });
+
+    fitTypeSelect.addEventListener("change", () => {
+      state.fitType = fitTypeSelect.value;
+      initParams();
+    });
+
+    toggleFitBtn.addEventListener("click", () => {
+      state.showFit = !state.showFit;
+      toggleFitBtn.textContent = state.showFit ? "Fit ausblenden" : "Fit einblenden";
+      toggleFitBtn.className = "toggle " + (state.showFit ? "on" : "off");
+      render();
+    });
+
+    toggleGridBtn.addEventListener("click", () => {
+      state.showGrid = !state.showGrid;
+      toggleGridBtn.textContent = state.showGrid ? "Raster ausblenden" : "Raster einblenden";
+      toggleGridBtn.className = "toggle " + (state.showGrid ? "on" : "off");
+      render();
+    });
+
+    toggleAxesBtn.addEventListener("click", () => {
+      state.showAxes = !state.showAxes;
+      toggleAxesBtn.textContent = state.showAxes ? "Achsen ausblenden" : "Achsen einblenden";
+      toggleAxesBtn.className = "toggle " + (state.showAxes ? "on" : "off");
+      render();
+    });
+
+    canvas.addEventListener("pointerdown", (e) => {
+      const p = getMousePos(e);
+      state.activeDrag = pickHandle(p);
+      if(state.activeDrag){
+        canvas.setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+      }
+    });
+
+    canvas.addEventListener("pointermove", (e) => {
+      if(!state.activeDrag) return;
+      const p = getMousePos(e);
+
+      if(state.activeDrag === "origin"){
+        const dx = p.x - state.origin.x;
+        const dy = p.y - state.origin.y;
+        state.origin = { x: clamp(p.x, 0, canvas.width), y: clamp(p.y, 0, canvas.height) };
+        state.xPoint = {
+          ...state.xPoint,
+          x: clamp(state.xPoint.x + dx, 0, canvas.width),
+          y: clamp(state.xPoint.y + dy, 0, canvas.height)
+        };
+        state.yPoint = {
+          ...state.yPoint,
+          x: clamp(state.yPoint.x + dx, 0, canvas.width),
+          y: clamp(state.yPoint.y + dy, 0, canvas.height)
+        };
+      }
+
+      if(state.activeDrag === "xPoint"){
+        state.xPoint = {
+          ...state.xPoint,
+          x: clamp(p.x, 0, canvas.width),
+          y: state.origin.y
+        };
+      }
+
+      if(state.activeDrag === "yPoint"){
+        state.yPoint = {
+          ...state.yPoint,
+          x: state.origin.x,
+          y: clamp(p.y, 0, canvas.height)
+        };
+      }
+
+      e.preventDefault();
+      render();
+    });
+
+    function stopDrag(e){
+      state.activeDrag = null;
+      if(e && e.pointerId !== undefined){
+        try { canvas.releasePointerCapture?.(e.pointerId); } catch(_err) {}
+      }
+    }
+    canvas.addEventListener("pointerup", stopDrag);
+    canvas.addEventListener("pointercancel", stopDrag);
+    canvas.addEventListener("pointerleave", stopDrag);
+    window.addEventListener("pointerup", stopDrag);
+
+    document.querySelectorAll(".tabbtn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tabbtn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      });
+    });
+
+    setCanvasSize(900, 600);
+    state.paramState = buildDefaultParamState(state.fitType);
+    renderParamControls();
+    render();
+  </script>
+</body>
+</html>
